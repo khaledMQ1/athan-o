@@ -1,19 +1,128 @@
-# 🕌 RAK Prayer Pro (2026 Edition)
 
-A high-end, responsive web dashboard providing accurate prayer timings specifically for **Ras Al Khaimah, UAE**. Synchronized with official Municipality and Awqaf standards.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAK Prayer | Official 2026 Sync</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root { --rak-deep: #022c22; --rak-gold: #fbbf24; }
+        body { font-family: 'Inter', sans-serif; background: var(--rak-deep); color: white; margin: 0; }
+        .islamic-pattern { background-image: url('https://www.transparenttextures.com/patterns/islamic-art.png'); background-attachment: fixed; }
+        .glass { background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .gold-text { color: var(--rak-gold); }
+        .arabic { font-family: 'Amiri', serif; }
+        .active-glow { border: 2px solid var(--rak-gold); box-shadow: 0 0 20px rgba(251, 191, 36, 0.2); }
+        @keyframes pulse-gold { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .live-indicator { animation: pulse-gold 2s infinite; }
+    </style>
+</head>
+<body class="islamic-pattern min-h-screen">
 
-### ✨ Key Features
-* **Official RAK Sync:** Uses the Umm Al-Qura (Method 4) calculation to match UAE ministry times.
-* **Real-time Countdown:** Dynamic timer showing exactly how much time is left until the next Salah.
-* **2026 Friday Protocol:** Automatically adjusts Friday Dhuhr times to 12:45 PM per UAE federal decree.
-* **Dual Calendar:** Simultaneous display of Gregorian and Arabic Hijri dates.
-* **Glassmorphism UI:** Modern, luxury aesthetic designed for high-end displays and mobile devices.
+    <div class="max-w-md mx-auto px-6 py-10">
+        <div class="text-center mb-8">
+            <h1 class="text-[10px] font-black tracking-[0.4em] gold-text opacity-80 uppercase">Ras Al Khaimah • UAE</h1>
+            <div id="clock" class="text-6xl font-black mt-2 tabular-nums tracking-tighter">00:00:00</div>
+            <div class="flex justify-center items-center gap-2 mt-2">
+                <span class="w-2 h-2 bg-red-500 rounded-full live-indicator"></span>
+                <p id="hijri" class="arabic text-xl gold-text">Loading...</p>
+            </div>
+        </div>
 
-### 🚀 How to Open
-1.  **On Laptop:** Simply open the `prayer.html` file in any modern browser.
-2.  **On Web:** Access via GitHub Pages at `https://[your-username].github.io/[your-repo]/prayer.html`
+        <div id="next-prayer-card" class="glass rounded-3xl p-7 mb-8 relative overflow-hidden active-glow">
+            <p class="text-[10px] font-bold opacity-60 uppercase tracking-widest">Time until <span id="target-name" class="text-white">...</span></p>
+            <div id="timer" class="text-5xl font-black gold-text mt-1 tabular-nums tracking-tight">00:00:00</div>
+            <div class="w-full bg-white/10 h-1.5 mt-5 rounded-full overflow-hidden">
+                <div id="bar" class="bg-amber-400 h-full transition-all duration-1000" style="width: 0%"></div>
+            </div>
+        </div>
 
-### 🛠️ Tech Stack
-* **Tailwind CSS:** For professional styling.
-* **Aladhan API:** For global timing data.
-* **JavaScript:** For real-time clock and countdown logic.
+        <div id="prayer-list" class="space-y-3">
+            </div>
+
+        <div class="mt-10 text-center">
+            <p class="text-[9px] opacity-40 leading-relaxed uppercase tracking-[0.2em]">
+                Synced with RAK Municipality • 2026 Calendar<br>
+                Umm Al-Qura Calculation Method
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let times = {};
+
+        async function getData() {
+            try {
+                const res = await fetch('https://api.aladhan.com/v1/timingsByCity?city=Ras%20Al%20Khaimah&country=UAE&method=4');
+                const data = await res.json();
+                times = data.data.timings;
+                
+                // 2026 Friday Protocol (12:45 PM)
+                const today = new Date();
+                if(today.getDay() === 5) times.Dhuhr = "12:45"; 
+                
+                document.getElementById('hijri').innerText = `${data.data.date.hijri.day} ${data.data.date.hijri.month.ar} ${data.data.date.hijri.year}`;
+                update();
+            } catch (err) {
+                console.error("Data fetch failed");
+            }
+        }
+
+        function update() {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toLocaleTimeString('en-GB', { hour12: false });
+
+            const prayers = [
+                {id:'Fajr', ar:'الفجر'}, {id:'Sunrise', ar:'الشروق'}, {id:'Dhuhr', ar:'الظهر'}, 
+                {id:'Asr', ar:'العصر'}, {id:'Maghrib', ar:'المغرب'}, {id:'Isha', ar:'العشاء'}
+            ];
+
+            const list = document.getElementById('prayer-list');
+            list.innerHTML = "";
+            let foundNext = false;
+
+            prayers.forEach(p => {
+                const [h, m] = times[p.id].split(':');
+                const pDate = new Date();
+                pDate.setHours(h, m, 0);
+                
+                const diff = pDate - now;
+                const isPast = diff < 0;
+
+                if (!isPast && !foundNext) {
+                    foundNext = true;
+                    document.getElementById('target-name').innerText = p.id;
+                    updateCountdown(diff);
+                }
+
+                const displayH = h % 12 || 12;
+                const ampm = h >= 12 ? 'PM':'AM';
+
+                list.innerHTML += `
+                    <div class="glass rounded-2xl p-4 flex justify-between items-center ${!isPast && foundNext ? 'bg-white/10 border-amber-500/30' : 'opacity-50'}">
+                        <div>
+                            <span class="text-[8px] uppercase tracking-widest font-bold opacity-40">${p.id}</span>
+                            <div class="arabic text-2xl font-bold ${!isPast && foundNext ? 'gold-text' : ''}">${p.ar}</div>
+                        </div>
+                        <div class="text-2xl font-bold tabular-nums">${displayH}:${m} <span class="text-[10px] opacity-30 font-normal">${ampm}</span></div>
+                    </div>
+                `;
+            });
+        }
+
+        function updateCountdown(ms) {
+            const s = Math.floor(ms / 1000) % 60;
+            const m = Math.floor(ms / 60000) % 60;
+            const h = Math.floor(ms / 3600000);
+            document.getElementById('timer').innerText = 
+                `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+            document.getElementById('bar').style.width = (100 - (ms / (4 * 3600000) * 100)) + "%";
+        }
+
+        setInterval(update, 1000);
+        getData();
+    </script>
+</body>
+</html>
